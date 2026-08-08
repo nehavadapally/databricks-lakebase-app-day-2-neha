@@ -100,6 +100,65 @@
       color: var(--muted);
     }
     #result:empty { display: none; }
+    #search-result:empty { display: none; }
+
+    .search-result-item {
+      background: #fafbfe;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      transition: box-shadow 0.15s ease;
+    }
+    .search-result-item:hover {
+      box-shadow: 0 2px 8px rgba(16, 24, 40, 0.08);
+    }
+    .search-result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      margin-bottom: 8px;
+    }
+    .search-result-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text);
+      margin: 0;
+      flex: 1;
+      display: flex;
+      align-items: center;
+    }
+    .search-result-score {
+      background: var(--accent);
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 12px;
+      white-space: nowrap;
+    }
+    .search-result-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin: 4px 0 8px 0;
+    }
+    .search-result-description {
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.5;
+      margin: 8px 0;
+    }
+    .search-result-link {
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      display: inline-block;
+      margin-top: 8px;
+    }
+    .search-result-link:hover {
+      text-decoration: underline;
+    }
 
     table {
       width: 100%;
@@ -139,38 +198,127 @@
     }
     .delete-btn:hover { background: var(--danger); color: #fff; }
     .delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Tab styles */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .tab-button {
+      padding: 12px 24px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: -2px;
+    }
+    .tab-button:hover {
+      color: var(--text);
+      background: var(--card-hover);
+    }
+    .tab-button.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
   <h1>Stock Watchlist</h1>
-  <p class="hint">Enter a single ticker symbol. This sends exactly ONE call to the Massive API to fetch the latest price, then adds it to your watchlist.</p>
+  <p class="hint">Manage your stock watchlist and search for relevant news articles using AI-powered semantic search.</p>
 
-  <div class="card">
-    <form id="stock-form">
-      <label for="symbol">Ticker symbol</label>
-      <input type="text" id="symbol" name="symbol" placeholder="AAPL" required>
-      <button type="submit">Add to watchlist</button>
-    </form>
-
-    <div id="result"></div>
+  <!-- Tab Navigation -->
+  <div class="tabs">
+    <button class="tab-button active" data-tab="watchlist">
+      📊 My Watchlist
+    </button>
+    <button class="tab-button" data-tab="search">
+      🔍 Vector Search
+    </button>
   </div>
 
-  <div class="card">
-    <table id="watchlist-table">
-      <thead>
-        <tr>
-          <th>Symbol</th>
-          <th>Email</th>
-          <th>Latest price</th>
-          <th>Updated</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="watchlist-body"></tbody>
-    </table>
+  <!-- Watchlist Tab -->
+  <div id="watchlist-tab" class="tab-content active">
+    <div class="card">
+      <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Add to Watchlist</h2>
+      <form id="stock-form">
+        <label for="symbol">Ticker symbol</label>
+        <input type="text" id="symbol" name="symbol" placeholder="AAPL" required>
+        <button type="submit">Add to watchlist</button>
+      </form>
+
+      <div id="result"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="font-size: 16px; font-weight: 600; margin: 0 0 16px 0;">Your Watchlist</h3>
+      <table id="watchlist-table">
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Email</th>
+            <th>Latest price</th>
+            <th>Updated</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="watchlist-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Search Tab -->
+  <div id="search-tab" class="tab-content">
+    <div class="card">
+      <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0;">Search News Documents & Chunks</h2>
+      <p class="hint" style="margin-bottom: 16px;">Enter a query to find the most relevant news articles and article segments using semantic search.</p>
+      
+      <form id="search-form">
+        <label for="search-query">Search query</label>
+        <input type="text" id="search-query" name="query" placeholder="What are the risks of investing in semiconductor stocks?" required>
+        <button type="submit">Search</button>
+      </form>
+
+      <div id="search-result"></div>
+      
+      <div id="search-results-container" style="display: none; margin-top: 24px;">
+        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; color: var(--text);">Search Results</h3>
+        <div id="search-results"></div>
+      </div>
+    </div>
   </div>
 
   <script>
+    // Tab switching logic
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const targetTab = button.dataset.tab;
+        
+        // Remove active class from all buttons and contents
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+        
+        // Add active class to clicked button and corresponding content
+        button.classList.add('active');
+        document.getElementById(targetTab + '-tab').classList.add('active');
+      });
+    });
+
+    // Watchlist functionality
     const form = document.getElementById("stock-form");
     const resultEl = document.getElementById("result");
     const watchlistBody = document.getElementById("watchlist-body");
@@ -260,6 +408,95 @@
       } catch (err) {
         resultEl.textContent = "Request failed: " + err;
         btn.disabled = false;
+      }
+    });
+
+    // Search form handler
+    const searchForm = document.getElementById("search-form");
+    const searchResultEl = document.getElementById("search-result");
+    const searchResultsContainer = document.getElementById("search-results-container");
+    const searchResultsDiv = document.getElementById("search-results");
+
+    searchForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const query = document.getElementById("search-query").value;
+      searchResultEl.textContent = "Searching documents and chunks...";
+      searchResultsContainer.style.display = "none";
+
+      try {
+        const resp = await fetch("/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            query, 
+            limit: 10,
+            include_documents: true,
+            include_chunks: true
+          }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          searchResultEl.textContent = "Error: " + (data.error || resp.statusText);
+          return;
+        }
+        
+        searchResultEl.textContent = "";
+        
+        if (!data.results || data.results.length === 0) {
+          searchResultEl.textContent = "No results found. Try a different query.";
+          return;
+        }
+
+        // Display results
+        searchResultsContainer.style.display = "block";
+        searchResultsDiv.innerHTML = `
+          <div style="margin-bottom: 12px; font-size: 13px; color: var(--muted);">
+            Found ${data.total_count} results (${data.document_count} documents, ${data.chunk_count} chunks)
+          </div>
+        `;
+        
+        data.results.forEach((item) => {
+          const resultDiv = document.createElement("div");
+          resultDiv.className = "search-result-item";
+          
+          const similarity = item.similarity !== null && item.similarity !== undefined
+            ? (item.similarity * 100).toFixed(0) + "%"
+            : "-";
+          
+          const published = item.published_utc 
+            ? new Date(item.published_utc).toLocaleDateString()
+            : "Unknown date";
+          
+          // Determine badge and content based on result type
+          const isChunk = item.result_type === "chunk";
+          const badge = isChunk 
+            ? `<span style="background: #10b981; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 8px;">CHUNK ${item.chunk_index !== null ? item.chunk_index : ''}</span>`
+            : `<span style="background: #3b82f6; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 8px;">DOCUMENT</span>`;
+          
+          const content = item.content || "No content available.";
+          const truncated = content.length > 400 
+            ? content.substring(0, 400) + "..."
+            : content;
+          
+          resultDiv.innerHTML = `
+            <div class="search-result-header">
+              <h4 class="search-result-title">
+                ${item.title || "Untitled"}
+                ${badge}
+              </h4>
+              <span class="search-result-score">${similarity}</span>
+            </div>
+            <div class="search-result-meta">
+              ${item.ticker || "N/A"} • ${item.publisher_name || "Unknown publisher"} • ${published}
+            </div>
+            <div class="search-result-description">${truncated}</div>
+            ${item.article_url ? `<a href="${item.article_url}" target="_blank" class="search-result-link">Read full article →</a>` : ""}
+          `;
+          
+          searchResultsDiv.appendChild(resultDiv);
+        });
+      } catch (err) {
+        searchResultEl.textContent = "Request failed: " + err;
       }
     });
 

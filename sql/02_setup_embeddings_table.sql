@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS ticker_news_embeddings (
 );
 
 -- Create HNSW index for fast cosine similarity search
+-- HNSW: Hierarchical Navigable Small World, makes the vector search faster
+-- cosine_ops: Cosine distance operator
 CREATE INDEX IF NOT EXISTS idx_ticker_news_embeddings_embedding
 ON ticker_news_embeddings
 USING hnsw (embedding vector_cosine_ops);

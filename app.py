@@ -19,6 +19,7 @@ from flask import Flask, jsonify, render_template, request
 
 import lakebase
 from massive_client import MassiveClient
+from sentence_transformers import SentenceTransformer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("massive-app")
@@ -29,6 +30,9 @@ _w = WorkspaceClient()
 TABLE_NAME = os.environ.get("MASSIVE_TABLE_NAME", "massive_records")
 WATCHLIST_TABLE_NAME = os.environ.get("WATCHLIST_TABLE_NAME", "watchlist")
 NEWS_TABLE_NAME = os.environ.get("NEWS_TABLE_NAME", "ticker_news_documents")
+EMBEDDINGS_TABLE_NAME = os.environ.get("EMBEDDINGS_TABLE_NAME", "ticker_news_embeddings")
+CHUNK_EMBEDDINGS_TABLE_NAME = os.environ.get("CHUNK_EMBEDDINGS_TABLE_NAME", "ticker_news_chunk_embeddings")
+EMBEDDING_MODEL_NAME = os.environ.get("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 # Tickers to fetch news for by default (comma-separated), e.g. "AAPL,MSFT,GOOGL"
 DEFAULT_NEWS_TICKERS = [
@@ -404,6 +408,112 @@ def _upsert_news_batch(ticker: str, articles: list[dict]) -> int:
                 count += 1
             conn.commit()
     return count
+
+
+# Lazy-load embedding model (singleton)
+_embedding_model = None
+
+def get_embedding_model():
+    """Lazy-load the SentenceTransformer model once and reuse it."""
+    global _embedding_model
+    if _embedding_model is None:
+        logger.info(f"Loading embedding model: {EMBEDDING_MODEL_NAME}")
+        _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    return _embedding_model
+
+
+@app.route("/search", methods=["POST"])
+def search_news():
+    """
+    Semantic search across both document-level (title+description) and
+    chunk-level (article body) embeddings using pgvector cosine similarity.
+    
+    Body: {
+        "query": "What are the risks?",
+        "limit": 10,
+        "include_documents": true,
+        "include_chunks": true
+    }
+    """
+    body = request.json if request.is_json else {}
+    query = body.get("query", "").strip()
+    limit = int(body.get("limit", 10))
+    include_documents = body.get("include_documents", True)
+    include_chunks = body.get("include_chunks", True)
+    
+    if not query:
+        return jsonify({"error": "Query is required"}), 400
+    
+    # Compute query embedding
+    model = get_embedding_model()
+    query_embedding = model.encode(query).tolist()
+    embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
+    
+    results = []
+    
+    # Search document embeddings (title + description)
+    if include_documents:
+        doc_rows = lakebase.run_query(
+            f"""
+            SELECT 
+                e.id,
+                e.ticker,
+                n.title,
+                n.description AS content,
+                n.article_url,
+                n.publisher_name,
+                n.published_utc,
+                1 - (e.embedding <=> %s::vector) AS similarity,
+                'document' AS result_type
+            FROM {EMBEDDINGS_TABLE_NAME} e
+            JOIN {NEWS_TABLE_NAME} n ON e.id = n.id
+            ORDER BY e.embedding <=> %s::vector
+            LIMIT %s
+            """,
+            (embedding_str, embedding_str, limit)
+        )
+        results.extend(doc_rows)
+    
+    # Search chunk embeddings (article body segments)
+    if include_chunks:
+        chunk_rows = lakebase.run_query(
+            f"""
+            SELECT 
+                c.id,
+                c.article_id,
+                c.ticker,
+                c.chunk_index,
+                n.title,
+                c.chunk_text AS content,
+                n.article_url,
+                n.publisher_name,
+                n.published_utc,
+                1 - (c.embedding <=> %s::vector) AS similarity,
+                'chunk' AS result_type
+            FROM {CHUNK_EMBEDDINGS_TABLE_NAME} c
+            JOIN {NEWS_TABLE_NAME} n ON c.article_id = n.id
+            ORDER BY c.embedding <=> %s::vector
+            LIMIT %s
+            """,
+            (embedding_str, embedding_str, limit)
+        )
+        results.extend(chunk_rows)
+    
+    # Sort all results by similarity descending
+    results.sort(key=lambda x: x.get("similarity", 0), reverse=True)
+    results = results[:limit]  # Keep only top N overall
+    
+    # Count result types
+    document_count = sum(1 for r in results if r.get("result_type") == "document")
+    chunk_count = sum(1 for r in results if r.get("result_type") == "chunk")
+    
+    return jsonify({
+        "results": results,
+        "total_count": len(results),
+        "document_count": document_count,
+        "chunk_count": chunk_count,
+        "query": query
+    })
 
 
 if __name__ == '__main__':
